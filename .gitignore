@@ -1,0 +1,22 @@
+# node
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# env & secrets
+.env
+*.env
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# build/output
+dist/
+coverage/

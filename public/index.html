@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <title>Patient Intake Triage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="triage.css">
+</head>
+<body>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-inner container">
+      <div class="title">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 7h18M6 7v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M8 7l1-3h6l1 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h1>Patient Intake Triage</h1>
+        <span class="badge">MySQL + Express + HTML/JS + FastAPI</span>
+      </div>
+      <div class="actions">
+        <button class="btn secondary" id="refreshBtn" title="Refresh data">⟳ Refresh</button>
+        <button class="btn secondary" id="themeBtn" title="Toggle theme">🌙 Theme</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    <div class="grid">
+      <!-- Queue -->
+      <section class="card two-third">
+        <div class="card-head">
+          <h3>Triage Queue</h3>
+          <div class="filters">
+            <label class="switch"><input type="checkbox" id="highOnly"> <span>High risk only</span></label>
+            <div class="search"><input id="queueSearch" placeholder="Search name or complaint…"></div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="queueWrap" class="table-wrap">
+            <div class="empty">Loading queue… <span class="spinner"></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add Patient -->
+      <section class="card one-third">
+        <div class="card-head"><h3>Add Patient</h3></div>
+        <div class="card-body">
+          <form id="form-patient" class="row-1" autocomplete="off">
+            <div class="row">
+              <div>
+                <label>First Name</label>
+                <input id="pt-first" required maxlength="80" />
+              </div>
+              <div>
+                <label>Last Name</label>
+                <input id="pt-last" required maxlength="80" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>MRN (optional)</label>
+                <input id="pt-mrn" maxlength="64" />
+              </div>
+              <div>
+                <label>Phone (optional)</label>
+                <input id="pt-phone" maxlength="40" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>Date of Birth</label>
+                <input id="pt-dob" type="date" />
+              </div>
+              <div>
+                <label>Sex</label>
+                <select id="pt-sex">
+                  <option value="">—</option>
+                  <option value="F">F</option>
+                  <option value="M">M</option>
+                  <option value="X">X</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+              <button class="btn" id="btnAddPatient">Add Patient</button>
+              <button class="btn ghost" type="reset">Clear</button>
+            </div>
+            <div class="muted" id="p-msg"></div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Add Visit -->
+      <section class="card half">
+        <div class="card-head"><h3>Add Visit</h3></div>
+        <div class="card-body">
+          <form id="form-visit" class="row-1" autocomplete="off">
+            <div class="row">
+              <div>
+                <label>Patient</label>
+                <select id="v-patient"></select>
+              </div>
+              <div>
+                <label>Chief Complaint</label>
+                <input id="v-cc" maxlength="255" placeholder="e.g., Chest pain" />
+              </div>
+            </div>
+            <div class="row-1">
+              <div>
+                <label>Symptoms / Notes</label>
+                <textarea id="v-symptoms" placeholder="Enter brief description…"></textarea>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+              <button class="btn" id="btnAddVisit">Add Visit</button>
+              <button class="btn ghost" type="reset">Clear</button>
+            </div>
+            <div class="muted" id="v-msg"></div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Run Triage -->
+      <section class="card half">
+        <div class="card-head"><h3>Run Triage</h3></div>
+        <div class="card-body">
+          <form id="form-triage" class="row-1" autocomplete="off">
+            <div class="row">
+              <div>
+                <label>Visit</label>
+                <select id="t-visit"></select>
+              </div>
+              <div>
+                <label>Action</label>
+                <select disabled>
+                  <option>Predict risk (AI)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+              <button class="btn" id="btnTriage">Run AI</button>
+              <button class="btn ghost" type="reset">Clear</button>
+            </div>
+            <div class="muted" id="t-msg"></div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Prediction Log -->
+      <section class="card half">
+        <div class="card-head">
+          <h3>Prediction Log</h3>
+          <span class="badge">latest 50</span>
+        </div>
+        <div class="card-body">
+          <div id="logWrap" class="table-wrap">
+            <div class="empty">Loading predictions… <span class="spinner"></span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">
+      For clinical decision support only. Not a medical device. Not for diagnostic use.
+    </div>
+  </main>
+
+  <div id="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    // --------- Utilities ---------
+    const $ = (s,r=document)=>r.querySelector(s);
+    const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+    const df = new Intl.DateTimeFormat(undefined,{dateStyle:"medium", timeStyle:"short"});
+
+    function toast(msg,type="ok"){
+      const wrap=$("#toast"); const el=document.createElement("div");
+      el.className=`toast ${type}`; el.innerHTML=`<div>${msg}</div>`;
+      wrap.appendChild(el); setTimeout(()=>{el.style.opacity=0; setTimeout(()=>el.remove(),300)},3200);
+    }
+    function setLoading(btn,loading){
+      if(!btn) return;
+      if(loading){ btn.dataset._label=btn.textContent; btn.innerHTML='<span class="spinner"></span>'; btn.disabled=true; }
+      else{ btn.innerHTML=btn.dataset._label||'Submit'; btn.disabled=false; }
+    }
+    async function api(path, opts={}){
+      const res = await fetch(path,{headers:{"Content-Type":"application/json"}, ...opts});
+      let data=null; try{data=await res.json()}catch{}
+      if(!res.ok) throw new Error((data&&data.error)||`HTTP ${res.status}`);
+      return data;
+    }
+
+    // --------- Data ----------
+    let QUEUE = [];
+    let PATIENTS = [];
+    let VISITS = [];
+    let LOGS = [];
+    let sortQueue = { key: "visit_time", dir: "desc" };
+
+    function renderQueue(){
+      const q = $("#queueSearch").value.trim().toLowerCase();
+      const highOnly = $("#highOnly").checked;
+
+      let list = QUEUE.slice();
+      if(q){
+        list = list.filter(r =>
+          (r.first_name+" "+r.last_name).toLowerCase().includes(q) ||
+          String(r.chief_complaint||"").toLowerCase().includes(q)
+        );
+      }
+      if(highOnly) list = list.filter(r => (r.risk_level||"").toUpperCase()==="HIGH");
+
+      list.sort((a,b)=>{
+        const dir = sortQueue.dir==="asc"?1:-1;
+        const va = a[sortQueue.key], vb = b[sortQueue.key];
+        if(va===vb) return 0;
+        if(sortQueue.key==="risk_level"){
+          const order = {HIGH:1, MEDIUM:2, LOW:3, null:4, undefined:4};
+          return dir*( (order[va?.toUpperCase()]||4) - (order[vb?.toUpperCase()]||4) );
+        }
+        return dir * String(va||"").localeCompare(String(vb||""));
+      });
+
+      const th = (label,key)=>`<th class="sortable" data-key="${key}" ${sortQueue.key===key?`data-dir="${sortQueue.dir}"`:''}>${label}<span class="caret">▾</span></th>`;
+
+      if(!list.length){ $("#queueWrap").innerHTML='<div class="empty">No matching visits</div>'; return; }
+
+      const rows = list.map(r=>`
+        <tr>
+          <td class="mono">${r.visit_id}</td>
+          <td>${r.first_name} ${r.last_name}</td>
+          <td>${r.chief_complaint||'<span class="muted">—</span>'}</td>
+          <td>${r.risk_level ? `<span class="pill ${r.risk_level==='HIGH'?'warn':'ok'}">${r.risk_level}</span>` : '<span class="muted">—</span>'}</td>
+          <td class="mono">${r.risk_score!=null ? (Math.round(r.risk_score*1000)/1000).toFixed(3) : '—'}</td>
+          <td>${r.rationale||'<span class="muted">—</span>'}</td>
+          <td class="mono">${df.format(new Date(r.visit_time))}</td>
+          <td class="mono">${r.predicted_at ? df.format(new Date(r.predicted_at)) : '—'}</td>
+          <td>${r.status}</td>
+        </tr>
+      `).join("");
+
+      $("#queueWrap").innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              ${th("Visit","visit_id")}
+              ${th("Patient","last_name")}
+              ${th("Complaint","chief_complaint")}
+              ${th("Risk","risk_level")}
+              ${th("Score","risk_score")}
+              ${th("Rationale","rationale")}
+              ${th("Visit Time","visit_time")}
+              ${th("Predicted","predicted_at")}
+              ${th("Status","status")}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+
+      $$("#queueWrap th.sortable").forEach(thEl=>{
+        thEl.onclick=()=>{
+          const key=thEl.dataset.key;
+          sortQueue = { key, dir: (sortQueue.key===key && sortQueue.dir==="asc") ? "desc":"asc" };
+          renderQueue();
+        };
+      });
+    }
+
+    function renderPatientsSelect(){
+      const sel = $("#v-patient");
+      if(!PATIENTS.length){
+        sel.innerHTML='<option value="" disabled selected>No patients yet</option>'; sel.disabled=true; return;
+      }
+      sel.disabled=false;
+      sel.innerHTML = PATIENTS.map(p=>`<option value="${p.id}">${p.last_name}, ${p.first_name} ${p.mrn?`(MRN ${p.mrn})`:''}</option>`).join("");
+    }
+
+    function renderVisitsSelect(){
+      const sel = $("#t-visit");
+      if(!VISITS.length){
+        sel.innerHTML='<option value="" disabled selected>No visits</option>'; sel.disabled=true; return;
+      }
+      sel.disabled=false;
+      sel.innerHTML = VISITS.map(v=>`<option value="${v.id}">#${v.id} — ${v.patient} — ${v.chief_complaint||'No CC'}</option>`).join("");
+    }
+
+    function renderLogs(){
+      if(!LOGS.length){ $("#logWrap").innerHTML='<div class="empty">No predictions yet</div>'; return; }
+      const rows = LOGS.map(t=>`
+        <tr>
+          <td class="mono">${t.id}</td>
+          <td class="mono">${t.visit_id}</td>
+          <td>${t.patient}</td>
+          <td>${t.chief_complaint||'<span class="muted">—</span>'}</td>
+          <td><span class="pill ${t.risk_level==='HIGH'?'warn':'ok'}">${t.risk_level}</span></td>
+          <td class="mono">${(Math.round(t.risk_score*1000)/1000).toFixed(3)}</td>
+          <td>${t.rationale}</td>
+          <td class="mono">${df.format(new Date(t.created_at))}</td>
+          <td class="mono">${t.model_version}</td>
+        </tr>
+      `).join("");
+      $("#logWrap").innerHTML = `
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Visit</th><th>Patient</th><th>Complaint</th><th>Risk</th><th>Score</th><th>Rationale</th><th>When</th><th>Model</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    // --------- Loads ----------
+    async function loadQueue(){
+      $("#queueWrap").innerHTML='<div class="empty">Loading queue… <span class="spinner"></span></div>';
+      const query = $("#highOnly").checked ? "?risk=HIGH" : "";
+      QUEUE = await api("/api/queue"+query);
+      renderQueue();
+    }
+    async function loadPatients(){
+      PATIENTS = await api("/api/patients");
+      renderPatientsSelect();
+    }
+    async function loadVisits(){
+      VISITS = await api("/api/visits");
+      renderVisitsSelect();
+    }
+    async function loadLogs(){
+      LOGS = await api("/api/predictions?limit=50");
+      renderLogs();
+    }
+
+    // --------- Forms ----------
+    $("#form-patient").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const btn=$("#btnAddPatient"); setLoading(btn,true);
+      try{
+        const first_name=$("#pt-first").value.trim();
+        const last_name=$("#pt-last").value.trim();
+        const mrn=$("#pt-mrn").value.trim()||null;
+        const phone=$("#pt-phone").value.trim()||null;
+        const dob=$("#pt-dob").value||null;
+        const sex=$("#pt-sex").value||null;
+        if(!first_name || !last_name) throw new Error("First and last name are required.");
+        const out = await api("/api/patients",{method:"POST",body:JSON.stringify({first_name,last_name,mrn,phone,dob,sex})});
+        toast(`Patient created (id ${out.id})`);
+        e.target.reset();
+        await loadPatients();
+      }catch(err){ toast(err.message,"err"); $("#p-msg").textContent=`❌ ${err.message}`; }
+      finally{ setLoading(btn,false); }
+    });
+
+    $("#form-visit").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const btn=$("#btnAddVisit"); setLoading(btn,true);
+      try{
+        const patient_id=parseInt($("#v-patient").value,10);
+        const chief_complaint=$("#v-cc").value.trim()||null;
+        const symptom_text=$("#v-symptoms").value.trim()||null;
+        if(!Number.isInteger(patient_id)) throw new Error("Please select a patient.");
+        const out = await api("/api/visits",{method:"POST",body:JSON.stringify({patient_id,chief_complaint,symptom_text})});
+        toast(`Visit created (#${out.id})`);
+        e.target.reset();
+        await Promise.all([loadVisits(), loadQueue()]);
+      }catch(err){ toast(err.message,"err"); $("#v-msg").textContent=`❌ ${err.message}`; }
+      finally{ setLoading(btn,false); }
+    });
+
+    $("#form-triage").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const btn=$("#btnTriage"); setLoading(btn,true);
+      try{
+        const visit_id=parseInt($("#t-visit").value,10);
+        if(!Number.isInteger(visit_id)) throw new Error("Select a visit.");
+        const out = await api(`/api/triage/${visit_id}`,{method:"POST"});
+        toast(`AI: ${out.risk_level} (${(Math.round(out.risk_score*1000)/1000).toFixed(3)})`);
+        await Promise.all([loadQueue(), loadLogs()]);
+      }catch(err){ toast(err.message,"err"); $("#t-msg").textContent=`❌ ${err.message}`; }
+      finally{ setLoading(btn,false); }
+    });
+
+    // Filters & theme
+    $("#queueSearch").addEventListener("input", renderQueue);
+    $("#highOnly").addEventListener("change", loadQueue);
+    $("#refreshBtn").addEventListener("click", async ()=>{
+      toast("Refreshing…"); await Promise.all([loadQueue(), loadPatients(), loadVisits(), loadLogs()]); toast("Refreshed");
+    });
+
+    const THEME_KEY="triage.theme";
+    function applyTheme(){
+      const saved=localStorage.getItem(THEME_KEY)||"auto";
+      document.documentElement.setAttribute("data-theme", saved==="auto"
+        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : saved);
+    }
+    $("#themeBtn").addEventListener("click", ()=>{ const cur=document.documentElement.getAttribute("data-theme");
+      const next=cur==="dark"?"light":"dark"; localStorage.setItem(THEME_KEY,next); applyTheme(); toast(`Theme: ${next}`); });
+    applyTheme();
+
+    // Initial load
+    (async function init(){
+      try{
+        await Promise.all([loadQueue(), loadPatients(), loadVisits(), loadLogs()]);
+      }catch(err){ toast(err.message,"err"); }
+    })();
+  </script>
+</body>
+</html>
