@@ -21,7 +21,7 @@ A flowchart depicting the working of this system is given below:
 - _Backend:_ MySQL 8, Python 3.10+
 
 ## Development Tips ##
-- After editing .env, always restart Node
+- After editing [.env](https://github.com/JaySawant31/triage-ai/blob/main/.env) , always restart Node
 - Keep the *AI service* terminal open to view feedbacks
 
 ## License ##
